@@ -133,6 +133,10 @@ try {
   $pwV = (cmd /c "`"$NodeDir\playwright-cli.cmd`" --version 2>&1") | Select-Object -Last 1
   $pyV = cmd /c "`"$env:LOCALAPPDATA\Programs\Python\Python312\python.exe`" --version 2>&1"
   Log "=== versions: node=$nodeV npm=$npmV gws=$gwsV playwright-cli=$pwV python=$pyV ==="
+  # Shells spawned by an app that was already running BEFORE this script ran inherit a stale
+  # PATH. Print absolute paths so agents can keep working without an app restart.
+  Log "=== paths: node=$NodeDir\node.exe npm=$NodeDir\npm.cmd gws=$NodeDir\gws.cmd playwright-cli=$NodeDir\playwright-cli.cmd python=$env:LOCALAPPDATA\Programs\Python\Python312\python.exe ==="
+  Log "note: if a tool is 'not recognized' in this session, use the absolute paths above (or restart the app); new shells opened after app restart will have them on PATH"
 } catch { Fail "verify" $_.Exception.Message }
 
 Write-Output "SETUP-OK"
