@@ -17,6 +17,8 @@ $ProgressPreference = "SilentlyContinue"
 $NODE_VERSION = "24.18.0"
 $GWS_VERSION = "0.22.5"
 $PYTHON_VERSION = "3.12.10"
+$PLAYWRIGHT_CLI_VERSION = "0.1.17"
+$CTX7_VERSION = "0.5.4"
 
 $Root = "$env:LOCALAPPDATA\openmnk\tools"
 $NodeDir = "$Root\node"
@@ -93,7 +95,7 @@ try {
   try { Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force -ErrorAction Stop } catch {}
   # native tools write warnings to stderr; run via cmd with merged streams so PS 5.1
   # doesn't promote npm warnings to terminating errors
-  $out = cmd /c "`"$NodeDir\npm.cmd`" install -g --no-fund --no-audit @googleworkspace/cli@$GWS_VERSION @playwright/cli@latest ctx7@latest 2>&1"
+  $out = cmd /c "`"$NodeDir\npm.cmd`" install -g --no-fund --no-audit @googleworkspace/cli@$GWS_VERSION @playwright/cli@$PLAYWRIGHT_CLI_VERSION ctx7@$CTX7_VERSION 2>&1"
   $out | ForEach-Object { Add-Content $LogFile $_ }
   if ($LASTEXITCODE -ne 0) { Fail "npm-packages" "npm install -g exit $LASTEXITCODE" }
   Log "npm-packages: gws, playwright-cli, ctx7 installed"
