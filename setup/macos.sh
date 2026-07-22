@@ -11,7 +11,7 @@
 #   --skip gws,python     comma list
 #   --only node,uv        install ONLY these (plus auto-added prerequisites:
 #                         npm CLIs pull in node; python is installed BY uv, so it pulls in uv)
-# Stages: node, gws, playwright, ctx7, python, uv
+# Stages: node, gws, playwright, ctx7, python, uv, docs
 #
 # Output contract (for agents): every line is logged to /tmp/openmnk-setup.log.
 # The FINAL line is exactly "SETUP-OK" or "SETUP-FAIL:<stage>". On failure, read the log.
@@ -27,6 +27,7 @@ PYTHON_VERSION="3.12"
 PLAYWRIGHT_CLI_VERSION="0.1.17"
 CTX7_VERSION="0.5.4"
 UV_VERSION="0.11.30"
+DOC_LIBS="pypdfium2==5.12.1 pypdf==6.14.2 rapidocr-onnxruntime==1.4.4 openpyxl==3.1.5 python-docx==1.2.0"
 
 ROOT="${OPENMNK_TOOLS_ROOT:-$HOME/.openmnk/tools}"
 NODE_DIR="$ROOT/node"
@@ -50,7 +51,7 @@ fetch() { # url out stage
 }
 
 # ── stage selection ──────────────────────────────────────────────────────────
-ALL_STAGES="node gws playwright ctx7 python uv"
+ALL_STAGES="node gws playwright ctx7 python uv docs"
 ONLY=""
 SKIP=""
 while [ $# -gt 0 ]; do
@@ -84,6 +85,9 @@ want() { in_list "$1" "$SELECTED"; }
 # prerequisites: npm-installed CLIs need node; python is installed by uv
 if want gws || want playwright || want ctx7; then
   want node || SELECTED="$SELECTED node"
+fi
+if want docs && ! want python; then
+  SELECTED="$SELECTED python"
 fi
 if want python && ! want uv; then
   SELECTED="$SELECTED uv"
@@ -172,13 +176,39 @@ if want python; then
   UV="$LOCAL_BIN/uv"
   "$UV" python install "$PYTHON_VERSION" >> "$LOG_FILE" 2>&1 \
     || fail python "uv python install $PYTHON_VERSION failed"
-  PY_PATH="$("$UV" python find "$PYTHON_VERSION" 2>/dev/null)"
-  [ -n "$PY_PATH" ] && [ -x "$PY_PATH" ] || fail python "uv python find returned nothing"
-  ln -sf "$PY_PATH" "$LOCAL_BIN/python3"
-  ln -sf "$PY_PATH" "$LOCAL_BIN/python"
-  log "python: installed $("$LOCAL_BIN/python3" --version 2>&1) at $PY_PATH"
+  # uv-managed interpreters are externally managed (PEP 668) — pip installs into them
+  # fail. Wrap in a seeded venv so `pip install` works for agents and the docs stage.
+  if [ ! -x "$ROOT/pyenv/bin/python" ]; then
+    "$UV" venv --seed --python "$PYTHON_VERSION" "$ROOT/pyenv" >> "$LOG_FILE" 2>&1 \
+      || fail python "uv venv creation failed"
+  fi
+  # exec wrappers, NOT symlinks: python resolves symlinks to the base interpreter,
+  # which silently bypasses the venv (its site-packages disappear).
+  printf '#!/bin/sh\nexec "%s" "$@"\n' "$ROOT/pyenv/bin/python" > "$LOCAL_BIN/python3"
+  printf '#!/bin/sh\nexec "%s" "$@"\n' "$ROOT/pyenv/bin/python" > "$LOCAL_BIN/python"
+  chmod +x "$LOCAL_BIN/python3" "$LOCAL_BIN/python"
+  log "python: installed $("$LOCAL_BIN/python3" --version 2>&1) (venv at $ROOT/pyenv)"
 else
   log "python: skipped (not selected)"
+fi
+
+# ── stage: docs (pdf/ocr/office libs + digitize CLI) ────────────────────────
+if want docs; then
+  VENV_PY="$ROOT/pyenv/bin/python"
+  [ -x "$VENV_PY" ] || fail docs "python stage required but venv python missing"
+  # venv's own pip (seeded) — uv pip resolves shim symlinks down to the externally
+  # managed base interpreter and refuses.
+  # shellcheck disable=SC2086
+  "$VENV_PY" -m pip install --quiet --disable-pip-version-check $DOC_LIBS >> "$LOG_FILE" 2>&1 \
+    || fail docs "pip install failed"
+  "$LOCAL_BIN/python3" -c "import pypdfium2, pypdf, rapidocr_onnxruntime, openpyxl, docx" \
+    >> "$LOG_FILE" 2>&1 || fail docs "libs not importable via python3 shim"
+  fetch "https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tools/digitize.py" "$ROOT/digitize.py" docs
+  printf '#!/bin/sh\nexec "%s" "%s" "$@"\n' "$VENV_PY" "$ROOT/digitize.py" > "$LOCAL_BIN/digitize"
+  chmod +x "$LOCAL_BIN/digitize"
+  log "docs: pdf/ocr/office libs installed; digitize CLI at $LOCAL_BIN/digitize"
+else
+  log "docs: skipped (not selected)"
 fi
 
 # ── verify ───────────────────────────────────────────────────────────────────
@@ -203,6 +233,9 @@ fi
 if want uv; then
   VERSIONS="$VERSIONS uv=$("$LOCAL_BIN/uv" --version 2>&1 | head -1)"
   PATHS="$PATHS uv=$LOCAL_BIN/uv"
+fi
+if want docs; then
+  PATHS="$PATHS digitize=$LOCAL_BIN/digitize"
 fi
 log "=== versions:$VERSIONS ==="
 # Shells spawned by an app that was already running BEFORE this script ran inherit a stale

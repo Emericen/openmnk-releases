@@ -9,7 +9,7 @@
 #   -Skip "gws,python"   comma list
 #   -Only "node,uv"      install ONLY these (plus auto-added prerequisites:
 #                        npm CLIs pull in node; gws pulls in vcruntime)
-# Stages: vcruntime, node, gws, playwright, ctx7, python, uv
+# Stages: vcruntime, node, gws, playwright, ctx7, python, uv, docs
 #
 # Output contract (for agents): every line is logged to %TEMP%\openmnk-setup.log.
 # The FINAL line is exactly "SETUP-OK" or "SETUP-FAIL:<stage>". On failure, read the log.
@@ -31,9 +31,10 @@ $PYTHON_VERSION = "3.12.10"
 $PLAYWRIGHT_CLI_VERSION = "0.1.17"
 $CTX7_VERSION = "0.5.4"
 $UV_VERSION = "0.11.30"
+$DOC_LIBS = "pypdfium2==5.12.1 pypdf==6.14.2 rapidocr-onnxruntime==1.4.4 openpyxl==3.1.5 python-docx==1.2.0"
 
 # ── stage selection ──────────────────────────────────────────────────────────
-$AllStages = @("vcruntime", "node", "gws", "playwright", "ctx7", "python", "uv")
+$AllStages = @("vcruntime", "node", "gws", "playwright", "ctx7", "python", "uv", "docs")
 if ($Only -ne "" -and $Skip -ne "") {
   Write-Output "SETUP-FAIL:args (-Only and -Skip are mutually exclusive)"
   exit 1
@@ -53,6 +54,7 @@ function Want($s) { return $Selected -contains $s }
 # prerequisites: npm-installed CLIs need node; gws's native module needs the VC++ runtime
 if (((Want "gws") -or (Want "playwright") -or (Want "ctx7")) -and -not (Want "node")) { $Selected += "node" }
 if ((Want "gws") -and -not (Want "vcruntime")) { $Selected += "vcruntime" }
+if ((Want "docs") -and -not (Want "python")) { $Selected += "python" }
 
 $Root = "$env:LOCALAPPDATA\openmnk\tools"
 $NodeDir = "$Root\node"
@@ -205,6 +207,30 @@ try {
 } catch { Fail "uv" $_.Exception.Message }
 } else { Log "uv: skipped (not selected)" }
 
+# ── stage: docs ─────────────────────────────────────────────────────────────────
+# Document-processing stack: PDF render/read, OCR (pip-only, bundled models, no system
+# binary), and office-file libs — plus the tested `digitize` CLI (batch-inventories an
+# intake folder with per-document OCR confidence; see tools/digitize.py).
+if (Want "docs") {
+try {
+  $py = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
+  if (-not (Test-Path $py)) { Fail "docs" "python stage required but python.exe missing" }
+  $out = cmd /c "`"$py`" -m pip install --quiet --disable-pip-version-check $DOC_LIBS 2>&1"
+  $out | ForEach-Object { Add-Content $LogFile $_ }
+  if ($LASTEXITCODE -ne 0) { Fail "docs" "pip install exit $LASTEXITCODE" }
+  Fetch "https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tools/digitize.py" "$Root\digitize.py" "docs"
+  $DigitizeBin = "$env:USERPROFILE\.local\bin"
+  New-Item -ItemType Directory -Force $DigitizeBin | Out-Null
+  Set-Content -Path "$DigitizeBin\digitize.cmd" -Value "@`"$py`" `"$Root\digitize.py`" %*"
+  $env:Path = "$DigitizeBin;" + $env:Path
+  $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+  if ($userPath -notlike "*$DigitizeBin*") {
+    [Environment]::SetEnvironmentVariable("Path", "$DigitizeBin;$userPath", "User")
+  }
+  Log "docs: pdf/ocr/office libs installed; digitize CLI at $DigitizeBin\digitize.cmd"
+} catch { Fail "docs" $_.Exception.Message }
+} else { Log "docs: skipped (not selected)" }
+
 # ── verify ───────────────────────────────────────────────────────────────────
 try {
   $versions = @()
@@ -230,6 +256,7 @@ try {
     $versions += ("uv=" + ((cmd /c "`"$env:USERPROFILE\.local\bin\uv.exe`" --version 2>&1") | Select-Object -First 1))
     $paths += "uv=$env:USERPROFILE\.local\bin\uv.exe"
   }
+  if (Want "docs") { $paths += "digitize=$env:USERPROFILE\.local\bin\digitize.cmd" }
   Log ("=== versions: {0} ===" -f ($versions -join " "))
   # Shells spawned by an app that was already running BEFORE this script ran inherit a stale
   # PATH. Print absolute paths so agents can keep working without an app restart.
