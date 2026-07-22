@@ -25,6 +25,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 import time
 
@@ -67,15 +68,58 @@ def main():
     from rapidocr_onnxruntime import RapidOCR
     ocr = RapidOCR()
 
+    # Two money amounts glued into one OCR region ("310.0020,682.17"): ".NN" immediately
+    # followed by a digit is never one number — split them.
+    MONEY_GLUE = re.compile(r"(\.\d{2})(?=\d)")
+
+    def reconstruct(result):
+        """Rebuild visual rows from OCR regions so label/amount adjacency is TRUE.
+        Groups regions by vertical overlap, sorts left-to-right, renders column gaps
+        as spacing, and flags rows containing a low-confidence region."""
+        regions = []
+        for box, text, conf in result:
+            xs = [pt[0] for pt in box]
+            ys = [pt[1] for pt in box]
+            regions.append({"x0": min(xs), "x1": max(xs), "y0": min(ys), "y1": max(ys),
+                            "cy": sum(ys) / 4, "text": MONEY_GLUE.sub(r"\1 ", text),
+                            "conf": float(conf)})
+        regions.sort(key=lambda r: r["cy"])
+        rows = []
+        for r in regions:
+            for row in rows:
+                overlap = min(r["y1"], row["y1"]) - max(r["y0"], row["y0"])
+                if overlap > 0.5 * min(r["y1"] - r["y0"], row["y1"] - row["y0"]):
+                    row["items"].append(r)
+                    row["y0"] = min(row["y0"], r["y0"])
+                    row["y1"] = max(row["y1"], r["y1"])
+                    break
+            else:
+                rows.append({"y0": r["y0"], "y1": r["y1"], "items": [r]})
+        rows.sort(key=lambda row: (row["y0"] + row["y1"]) / 2)
+        lines = []
+        for row in rows:
+            items = sorted(row["items"], key=lambda r: r["x0"])
+            widths = [(r["x1"] - r["x0"]) / max(1, len(r["text"])) for r in items]
+            cw = max(1, sum(widths) / len(widths))
+            line = items[0]["text"]
+            for prev, cur in zip(items, items[1:]):
+                gap = cur["x0"] - prev["x1"]
+                line += " " * max(1, min(12, round(gap / cw))) + cur["text"]
+            low = min(r["conf"] for r in items)
+            if low < 0.93:
+                line += f"    [conf {low:.2f}]"
+            lines.append(line)
+        return "\n".join(lines)
+
     def ocr_image(pil_img):
         import numpy as np
         result, _ = ocr(np.array(pil_img.convert("RGB")))
         if not result:
             return "", 0.0, 0
-        lines = [text for _, text, _ in result]
+        text = reconstruct(result)
         confs = [float(c) for _, _, c in result]
-        words = sum(len(t.split()) for t in lines)
-        return "\n".join(lines), 100.0 * sum(confs) / len(confs), words
+        words = sum(len(t.split()) for _, t, _ in result)
+        return text, 100.0 * sum(confs) / len(confs), words
 
     def digest(path, rel, stem, ext):
         """Returns (method, page_texts) where page_texts = [(text, conf|None, words)]."""
