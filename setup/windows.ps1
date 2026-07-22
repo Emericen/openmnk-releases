@@ -188,7 +188,10 @@ try {
   } else {
     $uvScript = "$env:TEMP\uv-install.ps1"
     Fetch "https://astral.sh/uv/$UV_VERSION/install.ps1" $uvScript "uv"
-    $out = cmd /c "powershell -NoProfile -ExecutionPolicy Bypass -File `"$uvScript`" 2>&1"
+    # Pin the install dir explicitly. The installer otherwise honors XDG_* env vars, and shells
+    # spawned by the OpenMNK app inherit XDG roots pinned to the app's containment folder —
+    # uv.exe would land in AppData\Roaming\openmnk\... and the check below would fail.
+    $out = cmd /c "set UV_INSTALL_DIR=$UvBin&& set UV_NO_MODIFY_PATH=1&& powershell -NoProfile -ExecutionPolicy Bypass -File `"$uvScript`" 2>&1"
     $out | ForEach-Object { Add-Content $LogFile $_ }
     if (-not (Test-Path $uvExe)) { Fail "uv" "uv.exe missing after install" }
     Log ("uv: installed {0}" -f ((cmd /c "`"$uvExe`" --version 2>&1") | Select-Object -First 1))
