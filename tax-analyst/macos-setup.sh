@@ -13,7 +13,7 @@
 
 set -u
 
-PYTHON_VERSION="3.12"
+PYTHON_VERSION="3.12.10"
 UV_VERSION="0.11.30"
 DOC_LIBS="pypdfium2==5.12.1 pypdf==6.14.2 rapidocr-onnxruntime==1.4.4 openpyxl==3.1.5 python-docx==1.2.0"
 DIGITIZE_URL="https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tax-analyst/digitize.py"
