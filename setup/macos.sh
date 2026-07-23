@@ -203,7 +203,7 @@ if want docs; then
     || fail docs "pip install failed"
   "$LOCAL_BIN/python3" -c "import pypdfium2, pypdf, rapidocr_onnxruntime, openpyxl, docx" \
     >> "$LOG_FILE" 2>&1 || fail docs "libs not importable via python3 shim"
-  fetch "https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tools/digitize.py" "$ROOT/digitize.py" docs
+  fetch "https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tax-analyst/digitize.py" "$ROOT/digitize.py" docs
   printf '#!/bin/sh\nexec "%s" "%s" "$@"\n' "$VENV_PY" "$ROOT/digitize.py" > "$LOCAL_BIN/digitize"
   chmod +x "$LOCAL_BIN/digitize"
   log "docs: pdf/ocr/office libs installed; digitize CLI at $LOCAL_BIN/digitize"

@@ -210,7 +210,7 @@ try {
 # ── stage: docs ─────────────────────────────────────────────────────────────────
 # Document-processing stack: PDF render/read, OCR (pip-only, bundled models, no system
 # binary), and office-file libs — plus the tested `digitize` CLI (batch-inventories an
-# intake folder with per-document OCR confidence; see tools/digitize.py).
+# intake folder with per-document OCR confidence; see tax-analyst/digitize.py).
 if (Want "docs") {
 try {
   $py = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
@@ -218,7 +218,7 @@ try {
   $out = cmd /c "`"$py`" -m pip install --quiet --disable-pip-version-check $DOC_LIBS 2>&1"
   $out | ForEach-Object { Add-Content $LogFile $_ }
   if ($LASTEXITCODE -ne 0) { Fail "docs" "pip install exit $LASTEXITCODE" }
-  Fetch "https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tools/digitize.py" "$Root\digitize.py" "docs"
+  Fetch "https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tax-analyst/digitize.py" "$Root\digitize.py" "docs"
   $DigitizeBin = "$env:USERPROFILE\.local\bin"
   New-Item -ItemType Directory -Force $DigitizeBin | Out-Null
   Set-Content -Path "$DigitizeBin\digitize.cmd" -Value "@`"$py`" `"$Root\digitize.py`" %*"
