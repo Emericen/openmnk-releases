@@ -3,7 +3,7 @@
 # Installs exactly what the Tax Analyst agent needs, nothing else:
 #   - uv (pinned) and a Python 3.12 venv (per-user, no sudo, no Homebrew)
 #   - pinned document libraries: pypdfium2, pypdf, rapidocr, openpyxl, python-docx
-#   - the `digitize` command (intake folder -> machine-readable _ocr twin)
+#   - the `digitize` command (intake folder -> machine-readable _workpapers twin)
 # Idempotent — safe to re-run; finished steps skip.
 #
 # Run:  curl -fsSL https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tax-analyst/macos-setup.sh -o /tmp/tax-setup.sh && bash /tmp/tax-setup.sh

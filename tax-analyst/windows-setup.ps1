@@ -2,7 +2,7 @@
 # Installs exactly what the Tax Analyst agent needs, nothing else:
 #   - Python 3.12 (per-user, no elevation)
 #   - pinned document libraries: pypdfium2, pypdf, rapidocr, openpyxl, python-docx
-#   - the `digitize` command (intake folder -> machine-readable _ocr twin)
+#   - the `digitize` command (intake folder -> machine-readable _workpapers twin)
 # Idempotent — safe to re-run; finished steps skip.
 #
 # Run:  curl.exe -fsSL https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tax-analyst/windows-setup.ps1 -o "$env:TEMP\tax-setup.ps1"; powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\tax-setup.ps1"
