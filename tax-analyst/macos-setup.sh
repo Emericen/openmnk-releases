@@ -4,6 +4,7 @@
 #   - uv (pinned) and a Python 3.12 venv (per-user, no sudo, no Homebrew)
 #   - pinned document libraries: pypdfium2, pypdf, rapidocr, openpyxl, python-docx
 #   - the `digitize` command (intake folder -> machine-readable _workpapers twin)
+#   - officecli (pinned) for producing Word/Excel deliverables
 # Idempotent — safe to re-run; finished steps skip.
 #
 # Run:  curl -fsSL https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tax-analyst/macos-setup.sh -o /tmp/tax-setup.sh && bash /tmp/tax-setup.sh
@@ -14,9 +15,11 @@
 set -u
 
 PYTHON_VERSION="3.12.10"
+OFFICECLI_VERSION="v1.0.142"
+RAW_REF="${OPENMNK_RAW_REF:-main}"
 UV_VERSION="0.11.30"
 DOC_LIBS="pypdfium2==5.12.1 pypdf==6.14.2 rapidocr-onnxruntime==1.4.4 openpyxl==3.1.5 python-docx==1.2.0"
-DIGITIZE_URL="https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tax-analyst/digitize.py"
+DIGITIZE_URL="https://raw.githubusercontent.com/Emericen/openmnk-releases/$RAW_REF/tax-analyst/digitize.py"
 
 ROOT="${OPENMNK_TOOLS_ROOT:-$HOME/.openmnk/tax-analyst}"
 LOCAL_BIN="$HOME/.local/bin"
@@ -90,9 +93,26 @@ if [ ! -f "$HOME/.zprofile" ] || ! grep -qF "# openmnk-tools" "$HOME/.zprofile";
 fi
 log "digitize: installed at $LOCAL_BIN/digitize"
 
+
+# ── step: officecli ──────────────────────────────────────────────────────────
+OC="$LOCAL_BIN/officecli"
+OC_BARE="${OFFICECLI_VERSION#v}"
+case "$(uname -m)" in
+  arm64) OC_ASSET="officecli-mac-arm64" ;;
+  *)     OC_ASSET="officecli-mac-x64" ;;
+esac
+if [ -x "$OC" ] && "$OC" --version 2>/dev/null | grep -qF "$OC_BARE"; then
+  log "officecli: $OFFICECLI_VERSION already installed, skip"
+else
+  fetch "https://github.com/iOfficeAI/OfficeCLI/releases/download/$OFFICECLI_VERSION/$OC_ASSET" "$OC" officecli
+  chmod +x "$OC"
+  "$OC" --version >> "$LOG_FILE" 2>&1 || fail officecli "not runnable after install"
+  log "officecli: installed $("$OC" --version 2>&1 | head -1)"
+fi
+
 # ── verify ───────────────────────────────────────────────────────────────────
 log "=== versions: python=$("$LOCAL_BIN/python3" --version 2>&1) uv=$("$UV" --version 2>/dev/null | head -1) ==="
-log "=== paths: python=$LOCAL_BIN/python3 digitize=$LOCAL_BIN/digitize ==="
+log "=== paths: python=$LOCAL_BIN/python3 digitize=$LOCAL_BIN/digitize officecli=$LOCAL_BIN/officecli ==="
 log "note: if a tool is 'not found' in this session, use the absolute paths above"
 
 echo "SETUP-OK"
