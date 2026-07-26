@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # OpenMNK intake digitizer. Reads a folder of client documents and writes a machine-readable
 # twin BESIDE it — the intake folder itself is never touched:
-#   <folder>_ocr/       mirrors the intake's directory structure
+#   <folder>_workpapers/       mirrors the intake's directory structure
 #     <doc>.json         one per document, beside its page renders — pages carry either
 #                        OCR regions ({text, conf, bbox}, page width/height) or pdf text
 #     <doc>-pN.png       render of every OCR'd page (visual verification, bbox crops)
@@ -38,7 +38,7 @@ def main():
     root = os.path.abspath(args.folder)
     if not os.path.isdir(root):
         sys.exit(f"not a folder: {root}")
-    out = root.rstrip(os.sep) + "_ocr"
+    out = root.rstrip(os.sep) + "_workpapers"
     os.makedirs(out, exist_ok=True)
     log_f = open(os.path.join(out, "run.log"), "a", encoding="utf-8")
 

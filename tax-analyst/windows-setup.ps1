@@ -2,7 +2,8 @@
 # Installs exactly what the Tax Analyst agent needs, nothing else:
 #   - Python 3.12 (per-user, no elevation)
 #   - pinned document libraries: pypdfium2, pypdf, rapidocr, openpyxl, python-docx
-#   - the `digitize` command (intake folder -> machine-readable _ocr twin)
+#   - the `digitize` command (intake folder -> machine-readable _workpapers twin)
+#   - officecli (pinned) for producing Word/Excel deliverables
 # Idempotent — safe to re-run; finished steps skip.
 #
 # Run:  curl.exe -fsSL https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tax-analyst/windows-setup.ps1 -o "$env:TEMP\tax-setup.ps1"; powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\tax-setup.ps1"
@@ -17,8 +18,10 @@ $ProgressPreference = "SilentlyContinue"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $PYTHON_VERSION = "3.12.10"
+$OFFICECLI_VERSION = "v1.0.142"
+$RawRef = if ($env:OPENMNK_RAW_REF) { $env:OPENMNK_RAW_REF } else { "main" }
 $DOC_LIBS = "pypdfium2==5.12.1 pypdf==6.14.2 rapidocr-onnxruntime==1.4.4 openpyxl==3.1.5 python-docx==1.2.0"
-$DIGITIZE_URL = "https://raw.githubusercontent.com/Emericen/openmnk-releases/main/tax-analyst/digitize.py"
+$DIGITIZE_URL = "https://raw.githubusercontent.com/Emericen/openmnk-releases/$RawRef/tax-analyst/digitize.py"
 
 $Root = "$env:LOCALAPPDATA\openmnk\tax-analyst"
 $BinDir = "$env:USERPROFILE\.local\bin"
@@ -83,13 +86,30 @@ try {
   Log "digitize: installed at $BinDir\digitize.cmd"
 } catch { Fail "digitize" $_.Exception.Message }
 
+
+# ── step: officecli ──────────────────────────────────────────────────────────
+try {
+  $ocExe = "$BinDir\officecli.exe"
+  $have = $false
+  if (Test-Path $ocExe) {
+    $v = cmd /c "`"$ocExe`" --version 2>&1"
+    if ("$v" -like "*$($OFFICECLI_VERSION.TrimStart('v'))*") { $have = $true; Log "officecli: $OFFICECLI_VERSION already installed, skip" }
+  }
+  if (-not $have) {
+    Fetch "https://github.com/iOfficeAI/OfficeCLI/releases/download/$OFFICECLI_VERSION/officecli-win-x64.exe" $ocExe "officecli"
+    $v = cmd /c "`"$ocExe`" --version 2>&1"
+    if ($LASTEXITCODE -ne 0) { Fail "officecli" "not runnable after install: $v" }
+    Log ("officecli: installed {0}" -f $v)
+  }
+} catch { Fail "officecli" $_.Exception.Message }
+
 # ── verify ───────────────────────────────────────────────────────────────────
 try {
   $pyV = cmd /c "`"$PyExe`" --version 2>&1"
   Log "=== versions: python=$pyV libs=$DOC_LIBS ==="
   # Shells spawned by an app that was already running BEFORE this script inherit a stale
   # PATH. Print absolute paths so agents can keep working without an app restart.
-  Log "=== paths: python=$PyExe digitize=$BinDir\digitize.cmd ==="
+  Log "=== paths: python=$PyExe digitize=$BinDir\digitize.cmd officecli=$BinDir\officecli.exe ==="
   Log "note: if a tool is 'not recognized' in this session, use the absolute paths above"
 } catch { Fail "verify" $_.Exception.Message }
 
